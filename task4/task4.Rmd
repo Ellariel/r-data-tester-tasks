@@ -1,0 +1,143 @@
+---
+title: "Task3"
+author: "Danila Valko"
+date: "09 07 2021"
+output: 
+  html_document:
+    keep_md: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(MASS)
+library(fitdistrplus)
+```
+
+# Найти выбросы?
+
+### Подгрузим данные
+
+```{r data-load, warning=FALSE}
+data <- read.csv(file = "traffic_sample.csv")
+summary(data)
+str(data)
+```
+
+### Исходные соображения
+* Исходные данные скорее всего логнормальные.
+
+## Графический анализ
+
+### Гистограммы плотности распределения, ящички с усами
+
+```{r }
+par(mfrow=c(2,2))
+hist(data$volume, freq=FALSE)
+hist(data$volume_calc, freq=FALSE)
+hist(log(data$volume+1), freq=FALSE)
+hist(log(data$volume_calc+1), freq=FALSE)
+boxplot(data$volume)
+boxplot(data$volume_calc)
+boxplot(log(data$volume+1))
+boxplot(log(data$volume_calc+1))
+```
+
+## Baseline-стратегия
+0) Можно, наверное, в лоб заменить все значения, для некоторого фиксированного порога разницы volume и volume_calc на какие-нибудь линейные преобразования..но мы поступим иначе.
+1) Подобрем закон распределения к данным
+2) Выбрем доверительный интервал/трешхолд
+3) Заменим пустыми значения выходящие за пределы доверительного интервала
+
+## Подбор распределения для views
+
+```{r, warning=FALSE}
+set.seed(48)
+volume <- sample(data$volume, length(data$volume)*0.1)
+```
+
+```{r, warning=FALSE}
+descdist(volume, boot = 500)
+plotdist(volume, histo = TRUE, demp = TRUE , xlogscale = TRUE, ylogscale = TRUE)
+```
+
+* Красиво..
+
+
+```{r, warning=FALSE, error=FALSE}
+d <- (volume+1) #некоторые преобразования
+fit_w  <- fitdist(d, "weibull")
+fit_ln <- fitdist(d, "lnorm")
+fit_g <- fitdist(d, "gamma")
+summary(fit_ln)
+summary(fit_w)
+summary(fit_g)
+```
+
+* По информационным критериям Вейбулл подходит лучше :)
+
+```{r, warning=FALSE}
+par(mfrow=c(2,2))
+plot.legend <- c("weibull", "lognormal", "gamma")
+denscomp(list(fit_w, fit_ln, fit_g), legendtext = plot.legend)
+cdfcomp (list(fit_w, fit_ln, fit_g), xlogscale = TRUE, legendtext = plot.legend)
+qqcomp  (list(fit_w, fit_ln, fit_g), xlogscale = TRUE, ylogscale = TRUE, legendtext = plot.legend)
+ppcomp  (list(fit_w, fit_ln, fit_g), legendtext = plot.legend)
+```
+
+* Если не брать во внимание выбросы, то Вейбул лёг как родной :)
+
+## Статистический критерий
+
+* Критерий Колмогорова-Смирнова не самый мощный...
+
+```{r, warning=FALSE}
+gofstat(list(fit_ln, fit_w, fit_g), fitnames = c("lnorm", "weibull", "gamma"))
+
+#посмотрим Колмогорова-Смирнова на данных (не самый мощный и не самый красивый..)
+paste("ks.test weibull", ks.test(d, "pweibull", shape = fit_w$estimate[1], scale = fit_w$estimate[2])$p.value)
+paste("ks.test gamma", ks.test(d, "pgamma", shape = fit_g$estimate[1], scale = fit_g$estimate[2])$p.value)
+paste("ks.test lnorm", ks.test(log(d), "pnorm")$p.value)
+```
+
+* Ну, Вейбулл на грани, берем его :)
+
+```{r, warning=FALSE}
+#Уточним параметры
+b <- bootdist(fit_w, bootmethod="nonparam", niter=500) 
+b <- summary(b)
+b
+```
+
+## Определим оутлаеры
+
+```{r, warning=FALSE}
+diff = data$volume - data$volume_calc
+print(paste0("Всего кандидатов на удаление: ",
+  length(diff[diff > 0]),
+  ", в хвостах Boxplot-а: ",
+            length(boxplot.stats(log(data$volume_calc))$out)))
+
+#qh = qweibull(0.975, shape = median(sapply(b$estim[1], as.numeric)), 
+#            scale = median(sapply(b$estim[2], as.numeric)), log = FALSE)
+#ql = qweibull(0.025, shape = median(sapply(b$estim[1], as.numeric)), 
+#            scale = median(sapply(b$estim[2], as.numeric)), log = FALSE)
+
+#print(paste("В хвостах нашего распределения:",
+#  length(data$volume_calc[data$volume_calc < ql | data$volume_calc < qh])))
+
+outliers = dweibull(data$volume_calc, shape = median(sapply(b$estim[1], as.numeric)), 
+            scale = median(sapply(b$estim[2], as.numeric)), log = FALSE)
+
+print(paste("Оутлаеров среди них:",
+  length(outliers[outliers < 5*10^-5])))
+
+
+```
+
+
+
+
+
+
+
+.

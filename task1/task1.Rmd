@@ -1,0 +1,60 @@
+---
+title: "Task1"
+author: "Danila Valko"
+date: "08 07 2021"
+output: 
+  html_document:
+    keep_md: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Подтопления
+
+### Грузим данные
+
+```{r data-load}
+data <- read.csv(file = "mchs_floods_lena.csv", sep = ';', fileEncoding = "UTF-8")
+head(data, 3)
+tail(data, 3)
+```
+
+### Общие замечания при визуальном осмотре (18 obs. x 14 vars.)
+* По структуре файла: в зависимости от назначения файла нужно учесть, что кодировка UTF-8 без BOM не всегда может корректно считываться, то же касается одинокого LF в конце строки.
+* По структуре данных:
+  - Первая колонка(поле) не именована, возможно это номер строки. Если это действительно номер строки, то данные явно не полные, индексация должна быть без разрывов.
+  - То же самое относительно разрывов в event_id: если это частичная выборка, то ok.
+  - В колонках bridge_count, road_count, social_object_count по-видимому предполагаются целые числа, но данные представлены с плавающей точкой (0.0), для некоторого ПО это может стать проблемой. 
+  - Относительно region_name и settlement_name: стоило бы добавить стандартные классификаторы, потому что наименование МО и ГО может различаться год от года.
+  - В колонке flood_type различное написание одного и того же типа "Паводок" и "паводок"
+  - В house_count и farm_count есть повторы для разных районов (см. event_id 3 и 6), нужно уточнять, возможно ли такое, что затопило одинаковое число домов с инервалом в пять дней.
+
+
+### Посмотрим число уникальных значений по некоторым колонкам 
+
+```{r }
+
+print(paste("event_id     l:",length(data$event_id),"lu:",length(unique(data$event_id))))
+print(paste("subject_name l:",length(data$subject_name),"lu:",length(unique(data$subject_name))))
+print(paste("object_name  l:",length(data$object_name),"lu:",length(unique(data$object_name))))
+print(paste("region_name  l:",length(data$region_name),"lu:",length(unique(data$region_name))))
+print(paste("year         l:",length(data$year),"lu:",length(unique(data$year))))
+print(paste("flood_type   l:",length(data$flood_type),"lu:",length(unique(data$flood_type))))
+
+```
+
+Всё в порядке, за исключением упомянутой выше flood_type
+
+### Сводные статистики для пордка..и типы данных
+
+```{r}
+str(data)
+summary(data)
+```
+
+
+
+
+.

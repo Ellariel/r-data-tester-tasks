@@ -1,0 +1,120 @@
+---
+title: "Task3"
+author: "Danila Valko"
+date: "09 07 2021"
+output: 
+  html_document:
+    keep_md: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(MASS)
+library(fitdistrplus)
+```
+
+# Какое это распределение?
+
+### Подгрузим данные
+
+```{r data-load, warning=FALSE}
+data <- read.csv(file = "engagement.csv")
+summary(data)
+str(data)
+```
+
+### Исходные соображения
+* Поскольку это данные о просмотрах, лайках, дислайках - они, чаще всего, распределены логнормально. При такой вариации, чтобы смотреть на гистограммы - стоит сразу логарифмировать :)
+Видно также, что лайки и дислайки - редкое явление.
+
+# Графический анализ
+
+### Гистограммы плотности распределения
+
+```{r }
+par(mfrow=c(2,2))
+hist(data$views, freq=FALSE)
+hist(data$likes, freq=FALSE)
+hist(data$dislikes, freq=FALSE)
+par(mfrow=c(2,2))
+hist(log(data$views+1), freq=FALSE)
+hist(log(data$likes+1), freq=FALSE)
+hist(log(data$dislikes+1), freq=FALSE)
+```
+
+### Ящички с усам и диаграммки расссеяния
+
+```{r, warning=FALSE}
+par(mfrow=c(2,2))
+boxplot(log(data$views+1))
+boxplot(log(data$likes+1))
+boxplot(log(data$dislikes+1))
+```
+
+```{r, warning=FALSE}
+par(mfrow=c(2,2))
+plot(data$id, log(data$views+1), pch=20)
+plot(data$id, log(data$likes+1), pch=20)
+plot(data$id, log(data$dislikes+1), pch=20)
+```
+
+* Графический анализ показывает, что объекты продуцирующие эти просмотры и лайки явно отличаются между друг-другом и могут быть сгруппированы в кластеры.
+
+# Подбор распределения для views
+
+```{r, warning=FALSE}
+set.seed(48)
+views <- sample(data$views, length(data$views)*0.1)
+```
+
+```{r, warning=FALSE}
+#hist(views)
+descdist(views, boot = 500)
+plotdist(views, histo = TRUE, demp = TRUE)
+```
+
+* Понамешано чего-то...диаграмма намекает на аутлаеры. Стоит протестировать Вейбулла, логнормальное и гамму.
+
+
+```{r, warning=FALSE, error=FALSE}
+d <- (views+1)/10 #некоторые преобразования
+fit_w  <- fitdist(d, "weibull")
+fit_ln <- fitdist(d, "lnorm")
+fit_g <- fitdist(d, "gamma")
+summary(fit_ln)
+summary(fit_w)
+summary(fit_g)
+```
+
+* По информационным критериям Вейбулл будто бы подходит лучше :)
+
+```{r, warning=FALSE}
+par(mfrow=c(2,2))
+plot.legend <- c("weibull", "lognormal", "gamma")
+denscomp(list(fit_w, fit_ln, fit_g), legendtext = plot.legend)
+cdfcomp (list(fit_w, fit_ln, fit_g), xlogscale = TRUE, legendtext = plot.legend)
+qqcomp  (list(fit_w, fit_ln, fit_g), xlogscale = TRUE, ylogscale = TRUE, legendtext = plot.legend)
+ppcomp  (list(fit_w, fit_ln, fit_g), legendtext = plot.legend)
+```
+
+* Всё очень плохо :)
+
+# Статистические критерии
+
+```{r, warning=FALSE}
+gofstat(list(fit_ln, fit_w, fit_g), fitnames = c("lnorm", "weibull", "gamma"))
+
+#посмотрим Колмогорова-Смирнова на данных (не самый мощный и не самый красивый..)
+paste("ks.test weibull", ks.test(d, "pweibull", shape = fit_w$estimate[1], scale = fit_w$estimate[2])$p.value)
+paste("ks.test gamma", ks.test(d, "pgamma", shape = fit_g$estimate[1], scale = fit_g$estimate[2])$p.value)
+paste("ks.test lnorm", ks.test(log(d), "pnorm")$p.value)
+```
+
+```
+
+* Всё ещё очень плохо :)
+
+* Остальные даже смотреть не хочу :)
+  
+
+.
